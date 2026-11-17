@@ -6,8 +6,15 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
-  // 1. NAMA TAMU PERSONALISASI (?to=Nama+Tamu atau /slug)
+  // 1. NAMA TAMU PERSONALISASI (?to=Nama+Tamu atau /slug + Sinkronisasi Admin)
   // -------------------------------------------------------------------------
+  const defaultGuests = [
+    { id: 1, name: 'Andi', slug: 'andi', invitation: 'Personal' },
+    { id: 2, name: 'Budi', slug: 'budi', invitation: 'Personal' },
+    { id: 3, name: 'Keluarga Besar', slug: 'keluarga-besar', invitation: 'Group' },
+    { id: 4, name: 'Teman Kampus', slug: 'teman-kampus', invitation: 'Group' }
+  ];
+
   const guestDisplayEl = document.getElementById('guest-name-display');
   const rsvpNameInput = document.getElementById('rsvp-name');
 
@@ -32,14 +39,43 @@ document.addEventListener('DOMContentLoaded', () => {
   const queryGuest = urlParams.get('to') || urlParams.get('guest') || urlParams.get('u') || urlParams.get('kepada');
   const rawPathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
   const pathSlug = (rawPathname && !rawPathname.toLowerCase().endsWith('index.html'))
-    ? decodeURIComponent(rawPathname.split('/').pop() || '')
+    ? decodeURIComponent(rawPathname.split('/').pop() || '').toLowerCase()
     : '';
 
   if (queryGuest) {
     const cleaned = decodeURIComponent(queryGuest.replace(/\+/g, ' ')).trim();
     applyGuestName(cleaned);
-  } else if (pathSlug && !['mepandes', 'undanganmepandes'].includes(pathSlug.toLowerCase())) {
-    applyGuestName(formatSlugToName(pathSlug));
+  } else if (pathSlug && !['mepandes', 'undanganmepandes', 'admin', 'dashboard'].includes(pathSlug)) {
+    let localCustomGuests = [];
+    try {
+      const rawCustom = localStorage.getItem('mepandes_admin_guests_v1');
+      if (rawCustom) localCustomGuests = JSON.parse(rawCustom);
+    } catch (e) {}
+
+    const combinedLocal = [...localCustomGuests, ...defaultGuests];
+    const matchedLocal = combinedLocal.find(g => g.slug && g.slug.toLowerCase() === pathSlug);
+    if (matchedLocal) {
+      applyGuestName(matchedLocal.name);
+    } else {
+      applyGuestName(formatSlugToName(pathSlug));
+    }
+
+    fetch(`/api/guests?slug=${encodeURIComponent(pathSlug)}`)
+      .then(res => (res.ok && String(res.headers.get('content-type') || '').includes('application/json') ? res.json() : Promise.reject()))
+      .then(guest => {
+        if (guest && guest.name) applyGuestName(guest.name);
+      })
+      .catch(() => {
+        fetch('/guests.json')
+          .then(res => (res.ok ? res.json() : null))
+          .then(list => {
+            if (Array.isArray(list)) {
+              const matched = list.find(g => g.slug && g.slug.toLowerCase() === pathSlug);
+              if (matched && matched.name) applyGuestName(matched.name);
+            }
+          })
+          .catch(() => {});
+      });
   } else if (guestDisplayEl) {
     guestDisplayEl.textContent = 'Tamu Undangan';
   }
@@ -620,7 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (rsvpForm) {
-    rsvpForm.addEventListener('submit', (e) => {
+    rsvpForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const nameVal = (document.getElementById('rsvp-name')?.value || '').trim();
       const msgVal = (document.getElementById('rsvp-message')?.value || '').trim();
@@ -631,12 +667,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!nameVal || !msgVal) return;
 
       const newEntry = {
+        id: Date.now(),
         name: nameVal,
         attendance: attVal,
         guests: guestsVal,
         message: msgVal,
         createdAt: 'Baru saja'
       };
+
+      try {
+        await fetch('/api/wishes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nameVal, attendance: attVal, message: msgVal })
+        });
+      } catch (err) {}
 
       wishesList.unshift(newEntry);
       try {
@@ -649,7 +694,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  renderWishes();
+  // Sinkronisasi awal dengan /api/wishes jika tersedia
+  fetch('/api/wishes')
+    .then(res => (res.ok && String(res.headers.get('content-type') || '').includes('application/json') ? res.json() : null))
+    .then(serverWishes => {
+      if (Array.isArray(serverWishes) && serverWishes.length > 0) {
+        wishesList = serverWishes;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(wishesList));
+        } catch (err) {}
+      }
+      renderWishes();
+    })
+    .catch(() => {
+      renderWishes();
+    });
 
   // -------------------------------------------------------------------------
   // 7. SCROLL REVEAL & PARTIKEL DEBU EMAS

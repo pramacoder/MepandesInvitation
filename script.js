@@ -573,30 +573,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------------------
   // 6. KONFIRMASI TAMU (RSVP) & KOLOM UCAPAN
   // -------------------------------------------------------------------------
-  const STORAGE_KEY = 'mepandes_pramjaya_agungfernando_wishes_v2';
-  const defaultWishes = [
-    {
-      name: 'Keluarga Besar Br. Sembung Gede',
-      attendance: 'hadir',
-      guests: 'Bersama Keluarga',
-      message: 'Rahajeng melaksanakan Upacara Manusa Yadnya Mepandes untuk I Gusti Nyoman Pramajaya & I Gusti Kadek Agung Gading Fernando. Semoga senantiasa diberikan kerahayuan dan tuntunan Ida Sang Hyang Widhi Wasa.',
-      createdAt: 'Baru saja'
-    },
-    {
-      name: 'I Made Adi & Keluarga',
-      attendance: 'hadir',
-      guests: '2 Orang',
-      message: 'Selamat menjalani prosesi Mepandes / Metatah. Semoga menjadi putra yang suputra dan senantiasa diberkahi kebahagiaan. Astungkara labda karya.',
-      createdAt: '1 jam yang lalu'
-    }
-  ];
+  const STORAGE_KEY = 'mepandes_pramjaya_agungfernando_wishes_v3';
+
+  // Hapus cache demo lama (v2) jika pernah tersimpan di browser
+  try {
+    localStorage.removeItem('mepandes_pramjaya_agungfernando_wishes_v2');
+  } catch (e) {}
+
+  const defaultWishes = [];
 
   let wishesList = [];
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    wishesList = saved ? JSON.parse(saved) : [...defaultWishes];
+    wishesList = saved ? JSON.parse(saved) : [];
   } catch (e) {
-    wishesList = [...defaultWishes];
+    wishesList = [];
   }
 
   const statTotal = document.getElementById('stat-total');
@@ -633,6 +624,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (statHadir) statHadir.textContent = hadirCount;
     if (statTidak) statTidak.textContent = tidakCount;
     if (statRagu) statRagu.textContent = raguCount;
+
+    if (wishesList.length === 0) {
+      wishesContainer.innerHTML = `
+        <div class="wish-empty">
+          Belum ada ucapan doa restu. Jadilah yang pertama memberikan ucapan &amp; doa restu!
+        </div>
+      `;
+      return;
+    }
 
     wishesContainer.innerHTML = wishesList.map(item => `
       <div class="wish-item">
@@ -698,11 +698,15 @@ document.addEventListener('DOMContentLoaded', () => {
   fetch('/api/wishes')
     .then(res => (res.ok && String(res.headers.get('content-type') || '').includes('application/json') ? res.json() : null))
     .then(serverWishes => {
-      if (Array.isArray(serverWishes) && serverWishes.length > 0) {
-        wishesList = serverWishes;
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(wishesList));
-        } catch (err) {}
+      if (Array.isArray(serverWishes)) {
+        if (serverWishes.length > 0) {
+          wishesList = serverWishes;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(wishesList));
+          } catch (err) {}
+        } else if (!localStorage.getItem(STORAGE_KEY)) {
+          wishesList = [];
+        }
       }
       renderWishes();
     })

@@ -178,7 +178,12 @@
     const searchGuestInput = document.getElementById('search-guest');
 
     const LOCAL_GUESTS_KEY = 'mepandes_admin_guests_v1';
-    const LOCAL_WISHES_KEY = 'mepandes_pramjaya_agungfernando_wishes_v2';
+    const LOCAL_WISHES_KEY = 'mepandes_pramjaya_agungfernando_wishes_v3';
+
+    // Bersihkan cache demo lama (v2) jika pernah ada
+    try {
+      localStorage.removeItem('mepandes_pramjaya_agungfernando_wishes_v2');
+    } catch (e) {}
 
     let allGuests = [];
     let allWishes = [];
@@ -461,13 +466,15 @@
           }
         } else {
           const localWishes = localStorage.getItem(LOCAL_WISHES_KEY);
-          if (localWishes) allWishes = JSON.parse(localWishes);
+          allWishes = localWishes ? JSON.parse(localWishes) : [];
         }
       } catch (e) {
         try {
           const localWishes = localStorage.getItem(LOCAL_WISHES_KEY);
-          if (localWishes) allWishes = JSON.parse(localWishes);
-        } catch (err) {}
+          allWishes = localWishes ? JSON.parse(localWishes) : [];
+        } catch (err) {
+          allWishes = [];
+        }
       }
 
       renderStats();
